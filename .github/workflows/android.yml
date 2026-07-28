@@ -26,10 +26,16 @@ jobs:
           gradle-version: "8.9"
 
       - name: Run unit tests
-        run: gradle :app:testDebugUnitTest --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle :app:testDebugUnitTest --stacktrace 2>&1 | tee gradle-test.log
 
       - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug --stacktrace 2>&1 | tee gradle-build.log
 
       - name: Rename APK
         run: cp app/build/outputs/apk/debug/app-debug.apk Orbis-Trade-AI-v0.2.0-debug.apk
@@ -41,3 +47,14 @@ jobs:
           path: Orbis-Trade-AI-v0.2.0-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload Gradle diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-diagnostics
+          path: |
+            gradle-test.log
+            gradle-build.log
+          if-no-files-found: ignore
+          retention-days: 7
