@@ -27,6 +27,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -112,11 +113,11 @@ private fun ControlScreen(viewModel: MainViewModel) {
         Text("Sprint 5 — estratégia, validação e estatísticas")
         StatusCard("Overlay", overlayRunning)
         StatusCard("MediaProjection", captureRunning)
-        Button(Modifier.fillMaxWidth(), onClick = {
+        Button(modifier = Modifier.fillMaxWidth(), onClick = {
             if (!Settings.canDrawOverlays(activity)) activity.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${activity.packageName}")))
             else ContextCompat.startForegroundService(activity, Intent(activity, OverlayService::class.java))
         }) { Text(if (overlayRunning) "Overlay ativo" else "Autorizar e iniciar overlay") }
-        Button(Modifier.fillMaxWidth(), onClick = {
+        Button(modifier = Modifier.fillMaxWidth(), onClick = {
             captureLauncher.launch(activity.getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
         }) { Text(if (captureRunning) "Captura ativa" else "Iniciar captura e análise") }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -194,7 +195,7 @@ private fun DashboardScreen(viewModel: MainViewModel) {
             val rate = if (hour.wins + hour.losses == 0) "—" else String.format(Locale.US, "%.0f%%", hour.winRate)
             MetricCard("%02d:00".format(hour.hour), "${hour.total} sinais · ${hour.wins}W/${hour.losses}L · $rate")
         }
-        Button(Modifier.fillMaxWidth(), onClick = { exportCsv(context) }) { Text("Exportar histórico em CSV") }
+        Button(modifier = Modifier.fillMaxWidth(), onClick = { exportCsv(context) }) { Text("Exportar histórico em CSV") }
         Text("Win/loss é informado manualmente após conferir o resultado na conta demo.")
     }
 }
