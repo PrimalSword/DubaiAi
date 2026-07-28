@@ -17,7 +17,7 @@ object IndicatorEngine {
         val slope = if (closes.size >= 6) closes.last() - closes[closes.lastIndex - 5] else 0.0
         val atrRatio = if (atr != null && closes.last() != 0.0) atr / abs(closes.last()) else 0.0
         val trend = when {
-            ema12 == null || ema60 == null -> "AQUECENDO"
+            closes.size < 12 || ema12 == null || ema60 == null -> "AQUECENDO"
             ema12 > ema60 && slope > 0 -> "ALTA"
             ema12 < ema60 && slope < 0 -> "BAIXA"
             else -> "NEUTRA"
@@ -46,11 +46,16 @@ object IndicatorEngine {
         )
     }
 
+    /**
+     * EMA progressiva: usa o primeiro valor como semente e aplica o fator do período
+     * desde o início. Isso permite calcular EMA 60 mesmo quando o viewport exibe menos
+     * de 60 candles, preservando a suavização de período 60. A maturidade é tratada no score.
+     */
     fun ema(values: List<Double>, period: Int): Double? {
-        if (values.size < period) return null
+        if (values.isEmpty() || period <= 0) return null
         val multiplier = 2.0 / (period + 1.0)
-        var result = values.take(period).average()
-        values.drop(period).forEach { result = (it - result) * multiplier + result }
+        var result = values.first()
+        values.drop(1).forEach { result = (it - result) * multiplier + result }
         return result
     }
 
