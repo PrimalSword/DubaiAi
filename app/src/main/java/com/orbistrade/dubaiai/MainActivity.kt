@@ -2,6 +2,7 @@ package com.orbistrade.dubaiai
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
@@ -34,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
@@ -41,7 +43,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.orbistrade.dubaiai.capture.ScreenCaptureService
 import com.orbistrade.dubaiai.core.AppRuntimeState
+import com.orbistrade.dubaiai.history.SignalHistoryStore
 import com.orbistrade.dubaiai.overlay.OverlayService
+import com.orbistrade.dubaiai.statistics.StatisticsEngine
+import java.io.File
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
@@ -52,6 +57,7 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2001)
+        AppRuntimeState.updateHistory(SignalHistoryStore(this).use { it.recent() })
         setContent { MaterialTheme { OrbisTradeApp() } }
     }
 }
@@ -67,15 +73,15 @@ class MainViewModel : ViewModel() {
 @Composable
 private fun OrbisTradeApp(viewModel: MainViewModel = viewModel()) {
     val navController = rememberNavController()
-    val routes = listOf("controle", "visao", "sinais")
+    val routes = listOf("controle", "visao", "sinais", "dashboard")
     Scaffold(bottomBar = {
         NavigationBar {
             routes.forEach { route ->
                 NavigationBarItem(
                     selected = false,
                     onClick = { navController.navigate(route) },
-                    icon = { Text(when (route) { "controle" -> "◉"; "visao" -> "◎"; else -> "⚡" }) },
-                    label = { Text(route.replaceFirstChar(Char::uppercase)) }
+                    icon = { Text(when (route) { "controle" -> "◉"; "visao" -> "◎"; "sinais" -> "⚡"; else -> "▦" }) },
+                    label = { Text(if (route == "dashboard") "Dados" else route.replaceFirstChar(Char::uppercase)) }
                 )
             }
         }
@@ -84,6 +90,7 @@ private fun OrbisTradeApp(viewModel: MainViewModel = viewModel()) {
             composable("controle") { ControlScreen(viewModel) }
             composable("visao") { VisionScreen(viewModel) }
             composable("sinais") { SignalsScreen(viewModel) }
+            composable("dashboard") { DashboardScreen(viewModel) }
         }
     }
 }
@@ -101,20 +108,17 @@ private fun ControlScreen(viewModel: MainViewModel) {
             })
         }
     }
-
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Orbis Trade AI", style = MaterialTheme.typography.headlineMedium)
-        Text("Sprint 4 — estratégia Dubai V1")
+        Text("Sprint 5 — estratégia, validação e estatísticas")
         StatusCard("Overlay", overlayRunning)
         StatusCard("MediaProjection", captureRunning)
         Button(modifier = Modifier.fillMaxWidth(), onClick = {
-            if (!Settings.canDrawOverlays(activity)) {
-                activity.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${activity.packageName}")))
-            } else ContextCompat.startForegroundService(activity, Intent(activity, OverlayService::class.java))
+            if (!Settings.canDrawOverlays(activity)) activity.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${activity.packageName}")))
+            else ContextCompat.startForegroundService(activity, Intent(activity, OverlayService::class.java))
         }) { Text(if (overlayRunning) "Overlay ativo" else "Autorizar e iniciar overlay") }
         Button(modifier = Modifier.fillMaxWidth(), onClick = {
-            val manager = activity.getSystemService(MediaProjectionManager::class.java)
-            captureLauncher.launch(manager.createScreenCaptureIntent())
+            captureLauncher.launch(activity.getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
         }) { Text(if (captureRunning) "Captura ativa" else "Iniciar captura e análise") }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = { activity.stopService(Intent(activity, OverlayService::class.java)) }) { Text("Parar overlay") }
@@ -129,10 +133,7 @@ private fun VisionScreen(viewModel: MainViewModel) {
     val vision by viewModel.vision.collectAsState()
     val indicators = vision.indicators
     val strategy = vision.strategy
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Diagnóstico, indicadores e estratégia", style = MaterialTheme.typography.headlineMedium)
         MetricCard("Frames capturados", frames.toString())
         MetricCard("Gráfico detectado", if (vision.graphDetected) "SIM (${(vision.graphConfidence * 100).toInt()}%)" else "NÃO")
@@ -149,26 +150,72 @@ private fun VisionScreen(viewModel: MainViewModel) {
         MetricCard("ATR 14", format(indicators.atr14))
         MetricCard("OCR", vision.ocrText.ifBlank { "Aguardando texto..." })
         vision.error?.let { Text("Erro: $it") }
-        Text("Sinais são experimentais e destinados exclusivamente a estudo em conta demo.")
     }
 }
 
 @Composable
 private fun SignalsScreen(viewModel: MainViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val history by viewModel.history.collectAsState()
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Histórico local de sinais", style = MaterialTheme.typography.headlineMedium)
         if (history.isEmpty()) Text("Nenhum sinal acionável registrado.")
         history.forEach { item ->
-            MetricCard(
-                "${item.direction} · ${item.score}/100 · ${item.confidence}",
-                "${item.asset}\n${DateFormat.getDateTimeInstance().format(Date(item.timestamp))}\n${item.reason}"
-            )
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${item.direction} · ${item.score}/100 · ${item.confidence}", style = MaterialTheme.typography.titleMedium)
+                    Text("${item.asset}\n${DateFormat.getDateTimeInstance().format(Date(item.timestamp))}\n${item.reason}")
+                    Text("Resultado: ${item.outcome ?: "PENDENTE"}")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { markOutcome(context, item.id, "WIN") }) { Text("WIN") }
+                        Button(onClick = { markOutcome(context, item.id, "LOSS") }) { Text("LOSS") }
+                        Button(onClick = { markOutcome(context, item.id, null) }) { Text("Limpar") }
+                    }
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun DashboardScreen(viewModel: MainViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val history by viewModel.history.collectAsState()
+    val stats = StatisticsEngine.calculate(history)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Dashboard do laboratório", style = MaterialTheme.typography.headlineMedium)
+        MetricCard("Sinais", "${stats.totalSignals} · CALL ${stats.calls} · PUT ${stats.puts}")
+        MetricCard("Resultados", "WIN ${stats.wins} · LOSS ${stats.losses} · Pendentes ${stats.pending}")
+        MetricCard("Win rate", if (stats.wins + stats.losses == 0) "SEM RESULTADOS" else String.format(Locale.US, "%.1f%%", stats.winRate))
+        MetricCard("Score médio", String.format(Locale.US, "%.1f/100", stats.averageScore))
+        MetricCard("Melhor horário", stats.bestHour?.let { "%02d:00".format(it) } ?: "DADOS INSUFICIENTES")
+        Text("Heatmap por horário", style = MaterialTheme.typography.titleLarge)
+        if (stats.hourly.isEmpty()) Text("Ainda não há sinais para o heatmap.")
+        stats.hourly.forEach { hour ->
+            val rate = if (hour.wins + hour.losses == 0) "—" else String.format(Locale.US, "%.0f%%", hour.winRate)
+            MetricCard("%02d:00".format(hour.hour), "${hour.total} sinais · ${hour.wins}W/${hour.losses}L · $rate")
+        }
+        Button(modifier = Modifier.fillMaxWidth(), onClick = { exportCsv(context) }) { Text("Exportar histórico em CSV") }
+        Text("Win/loss é informado manualmente após conferir o resultado na conta demo.")
+    }
+}
+
+private fun markOutcome(context: Context, id: Long, outcome: String?) {
+    SignalHistoryStore(context).use { store ->
+        store.setOutcome(id, outcome)
+        AppRuntimeState.updateHistory(store.recent())
+    }
+}
+
+private fun exportCsv(context: Context) {
+    val file = File(context.cacheDir, "orbis_trade_sinais.csv")
+    file.writeText(SignalHistoryStore(context).use { it.csv() })
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+    context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+        type = "text/csv"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }, "Exportar sinais"))
 }
 
 private fun format(value: Double?): String = value?.let { String.format(Locale.US, "%.2f", it) } ?: "AQUECENDO"

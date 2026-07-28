@@ -17,8 +17,6 @@ Nenhuma funcionalidade poderá ser desenvolvida fora do Sprint atual. Ideias nov
 - [x] MediaProjection
 - [x] Navegação
 
-Validação realizada em dispositivo Android: overlay e MediaProjection permaneceram ativos e a captura contabilizou frames.
-
 ## Sprint 2 - Visão Computacional ✅ IMPLEMENTADO
 - [x] OpenCV
 - [x] Detecção experimental do gráfico
@@ -28,10 +26,14 @@ Validação realizada em dispositivo Android: overlay e MediaProjection permanec
 ## Sprint 2.1 - Processamento em segundo plano ✅ VALIDADO EM DISPOSITIVO
 - [x] Análise executada no foreground service enquanto outro aplicativo está em primeiro plano
 - [x] Estado compartilhado independente da Activity
-- [x] Overlay atualizado em tempo real com gráfico, candles, tendência e volatilidade
-- [x] Diagnóstico persistente ao retornar ao Orbis
+- [x] Overlay atualizado em tempo real
+- [x] Diagnóstico persistente
 
-Validação realizada com gráfico real da corretora em primeiro plano.
+## Sprint 2.2 - Robustez de escala e zoom 🧪 IMPLEMENTADO — AGUARDA VALIDAÇÃO
+- [x] Detecção com limites proporcionais mais tolerantes
+- [x] Candles estreitos em zoom reduzido
+- [x] Margem proporcional na região do gráfico
+- [x] Memória temporária da última região detectada para evitar oscilações
 
 ## Sprint 3 - Indicadores ✅ VALIDADO FUNCIONALMENTE — CALIBRAÇÃO CONTÍNUA
 - [x] EMA 12
@@ -41,28 +43,28 @@ Validação realizada com gráfico real da corretora em primeiro plano.
 - [x] Lateralidade
 - [x] Tendência
 - [x] Volatilidade
-- [x] Testes unitários do motor matemático
+- [x] Testes unitários
 
-Os indicadores utilizam candles reconstruídos em coordenadas normalizadas da imagem. A matemática está coberta por testes; a calibração visual permanece contínua.
-
-## Sprint 4 - Estratégia Dubai V1 🧪 IMPLEMENTADO — AGUARDA VALIDAÇÃO EM DISPOSITIVO
+## Sprint 4 - Estratégia Dubai V1 ✅ VALIDADO FUNCIONALMENTE
 - [x] Motor de regras
 - [x] Score de 0 a 100
-- [x] Alertas visuais no overlay
-- [x] Histórico de sinais
+- [x] Alertas visuais
+- [x] Histórico
 - [x] Banco local SQLite
-- [x] Bloqueio de mercado lateral
-- [x] Cooldown contra alertas duplicados
-- [x] Testes unitários de CALL, PUT e WAIT
+- [x] Bloqueio lateral
+- [x] Cooldown
+- [x] Testes de CALL, PUT e WAIT
 
-Regras principais: EMA 60 confirma a tendência; rompimento da Bollinger 12 / 1,5 confirma a direção; mercado lateral bloqueia entrada; ATR e separação das EMAs ajustam o score. Sinais são exclusivamente experimentais e destinados a conta demo.
-
-## Sprint 5 - Estatísticas
-- [ ] Dashboard
-- [ ] Win/Loss
-- [ ] Heatmap
-- [ ] Horários
-- [ ] Exportação
+## Sprint 5 - Estatísticas 🧪 IMPLEMENTADO — AGUARDA VALIDAÇÃO
+- [x] Dashboard
+- [x] Registro manual de WIN/LOSS
+- [x] Win rate calculado apenas sobre resultados conferidos
+- [x] Heatmap por horário
+- [x] Melhor horário com amostra mínima
+- [x] Score médio, CALL/PUT e pendências
+- [x] Exportação CSV segura
+- [x] Migração do banco local
+- [x] Testes do motor estatístico
 
 ## Backlog
 - IA
