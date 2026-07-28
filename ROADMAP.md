@@ -7,7 +7,7 @@ Este documento governa o desenvolvimento do projeto.
 ### Regra Máxima
 Nenhuma funcionalidade poderá ser desenvolvida fora do Sprint atual. Ideias novas entram apenas no Backlog.
 
-## Sprint 1 - Infraestrutura ✅ CONCLUÍDO
+## Sprint 1 - Infraestrutura ✅ IMPLEMENTADO — AGUARDA VALIDAÇÃO EM DISPOSITIVO
 - [x] Estrutura Android
 - [x] Kotlin
 - [x] Jetpack Compose
@@ -17,17 +17,17 @@ Nenhuma funcionalidade poderá ser desenvolvida fora do Sprint atual. Ideias nov
 - [x] MediaProjection
 - [x] Navegação
 
-Critérios cumpridos: build validado pelo GitHub Actions; overlay e captura de tela implementados com diagnóstico por contador de frames.
+Critérios técnicos cumpridos: build validado pelo GitHub Actions; overlay e captura de tela implementados com diagnóstico por contador de frames.
 
-Commit de conclusão: `77036729d2eace83c49013a578b55e7aaa2d4bf7`.
+## Sprint 2 - Visão Computacional 🧪 IMPLEMENTADO — AGUARDA CALIBRAÇÃO E VALIDAÇÃO
+- [x] OpenCV
+- [x] Detecção experimental do gráfico
+- [x] Reconstrução inicial de candidatos a candles
+- [x] OCR dos textos visíveis, incluindo ativo e tempo quando presentes na tela
 
-## Sprint 2 - Visão Computacional
-- [ ] OpenCV
-- [ ] Detecção do gráfico
-- [ ] Reconstrução de candles
-- [ ] OCR do ativo e tempo
+Critério pendente de validação: precisão mínima de 95% em capturas reais da corretora. O Sprint somente será considerado validado após os testes em dispositivo e a calibração necessária.
 
-Critério: precisão mínima de 95%.
+Commit de implementação: `0e2d05efe9074fa7cf5136c2c57a6e0a72c378c8`.
 
 ## Sprint 3 - Indicadores
 - [ ] EMA
