@@ -1,5 +1,7 @@
 package com.orbistrade.dubaiai.core
 
+import com.orbistrade.dubaiai.history.SignalHistoryItem
+import com.orbistrade.dubaiai.strategy.StrategySignal
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -13,6 +15,7 @@ data class Candle(
 
 data class IndicatorSnapshot(
     val candleCount: Int = 0,
+    val lastClose: Double? = null,
     val ema12: Double? = null,
     val ema60: Double? = null,
     val bollingerUpper: Double? = null,
@@ -32,6 +35,7 @@ data class VisionSnapshot(
     val processingMs: Long = 0L,
     val analyzedFrames: Long = 0L,
     val indicators: IndicatorSnapshot = IndicatorSnapshot(),
+    val strategy: StrategySignal = StrategySignal(),
     val error: String? = null
 )
 
@@ -48,8 +52,12 @@ object AppRuntimeState {
     private val _vision = MutableStateFlow(VisionSnapshot())
     val vision = _vision.asStateFlow()
 
+    private val _history = MutableStateFlow<List<SignalHistoryItem>>(emptyList())
+    val history = _history.asStateFlow()
+
     fun setOverlayRunning(value: Boolean) { _overlayRunning.value = value }
     fun setCaptureRunning(value: Boolean) { _captureRunning.value = value }
     fun registerFrame() { _capturedFrames.value += 1 }
     fun updateVision(snapshot: VisionSnapshot) { _vision.value = snapshot }
+    fun updateHistory(items: List<SignalHistoryItem>) { _history.value = items }
 }

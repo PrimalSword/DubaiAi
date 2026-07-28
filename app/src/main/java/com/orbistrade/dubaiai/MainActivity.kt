@@ -42,6 +42,8 @@ import androidx.navigation.compose.rememberNavController
 import com.orbistrade.dubaiai.capture.ScreenCaptureService
 import com.orbistrade.dubaiai.core.AppRuntimeState
 import com.orbistrade.dubaiai.overlay.OverlayService
+import java.text.DateFormat
+import java.util.Date
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
@@ -59,19 +61,20 @@ class MainViewModel : ViewModel() {
     val captureRunning = AppRuntimeState.captureRunning
     val capturedFrames = AppRuntimeState.capturedFrames
     val vision = AppRuntimeState.vision
+    val history = AppRuntimeState.history
 }
 
 @Composable
 private fun OrbisTradeApp(viewModel: MainViewModel = viewModel()) {
     val navController = rememberNavController()
-    val routes = listOf("controle", "visao")
+    val routes = listOf("controle", "visao", "sinais")
     Scaffold(bottomBar = {
         NavigationBar {
             routes.forEach { route ->
                 NavigationBarItem(
                     selected = false,
                     onClick = { navController.navigate(route) },
-                    icon = { Text(if (route == "controle") "◉" else "◎") },
+                    icon = { Text(when (route) { "controle" -> "◉"; "visao" -> "◎"; else -> "⚡" }) },
                     label = { Text(route.replaceFirstChar(Char::uppercase)) }
                 )
             }
@@ -80,6 +83,7 @@ private fun OrbisTradeApp(viewModel: MainViewModel = viewModel()) {
         NavHost(navController, "controle", Modifier.padding(padding)) {
             composable("controle") { ControlScreen(viewModel) }
             composable("visao") { VisionScreen(viewModel) }
+            composable("sinais") { SignalsScreen(viewModel) }
         }
     }
 }
@@ -100,7 +104,7 @@ private fun ControlScreen(viewModel: MainViewModel) {
 
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Orbis Trade AI", style = MaterialTheme.typography.headlineMedium)
-        Text("Sprint 2.1 + Sprint 3 — visão em segundo plano e indicadores")
+        Text("Sprint 4 — estratégia Dubai V1")
         StatusCard("Overlay", overlayRunning)
         StatusCard("MediaProjection", captureRunning)
         Button(modifier = Modifier.fillMaxWidth(), onClick = {
@@ -124,26 +128,46 @@ private fun VisionScreen(viewModel: MainViewModel) {
     val frames by viewModel.capturedFrames.collectAsState()
     val vision by viewModel.vision.collectAsState()
     val indicators = vision.indicators
+    val strategy = vision.strategy
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Diagnóstico e indicadores", style = MaterialTheme.typography.headlineMedium)
+        Text("Diagnóstico, indicadores e estratégia", style = MaterialTheme.typography.headlineMedium)
         MetricCard("Frames capturados", frames.toString())
-        MetricCard("Frames analisados", vision.analyzedFrames.toString())
         MetricCard("Gráfico detectado", if (vision.graphDetected) "SIM (${(vision.graphConfidence * 100).toInt()}%)" else "NÃO")
         MetricCard("Candles reconstruídos", vision.candleCount.toString())
         MetricCard("Tendência", indicators.trend)
         MetricCard("Volatilidade", indicators.volatility)
         MetricCard("Lateralidade", if (indicators.lateral) "SIM" else "NÃO")
+        MetricCard("Sinal Dubai V1", strategy.direction.name)
+        MetricCard("Score", "${strategy.score}/100 — ${strategy.confidence}")
+        MetricCard("Fundamentação", strategy.reason)
         MetricCard("EMA 12", format(indicators.ema12))
         MetricCard("EMA 60", format(indicators.ema60))
         MetricCard("Bollinger 12 / 1,5", "${format(indicators.bollingerLower)} | ${format(indicators.bollingerMiddle)} | ${format(indicators.bollingerUpper)}")
         MetricCard("ATR 14", format(indicators.atr14))
-        MetricCard("Processamento", "${vision.processingMs} ms")
         MetricCard("OCR", vision.ocrText.ifBlank { "Aguardando texto..." })
         vision.error?.let { Text("Erro: $it") }
-        Text("Os preços são coordenadas normalizadas da imagem; a calibração visual será feita com gráficos reais da corretora.")
+        Text("Sinais são experimentais e destinados exclusivamente a estudo em conta demo.")
+    }
+}
+
+@Composable
+private fun SignalsScreen(viewModel: MainViewModel) {
+    val history by viewModel.history.collectAsState()
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Histórico local de sinais", style = MaterialTheme.typography.headlineMedium)
+        if (history.isEmpty()) Text("Nenhum sinal acionável registrado.")
+        history.forEach { item ->
+            MetricCard(
+                "${item.direction} · ${item.score}/100 · ${item.confidence}",
+                "${item.asset}\n${DateFormat.getDateTimeInstance().format(Date(item.timestamp))}\n${item.reason}"
+            )
+        }
     }
 }
 

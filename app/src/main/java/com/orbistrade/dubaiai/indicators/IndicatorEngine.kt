@@ -33,6 +33,7 @@ object IndicatorEngine {
             (bb.first - bb.third) < (atr ?: 0.0) * 3.0
         return IndicatorSnapshot(
             candleCount = candles.size,
+            lastClose = closes.last(),
             ema12 = ema12,
             ema60 = ema60,
             bollingerUpper = bb?.first,
