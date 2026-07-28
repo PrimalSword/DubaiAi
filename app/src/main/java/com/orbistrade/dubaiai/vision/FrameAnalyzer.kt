@@ -1,10 +1,10 @@
 package com.orbistrade.dubaiai.vision
 
-import android.content.Context
 import android.graphics.Bitmap
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.orbistrade.dubaiai.OrbisApplication
 import com.orbistrade.dubaiai.core.AppRuntimeState
 import com.orbistrade.dubaiai.core.Candle
 import com.orbistrade.dubaiai.core.VisionSnapshot
@@ -12,6 +12,7 @@ import com.orbistrade.dubaiai.history.SignalHistoryStore
 import com.orbistrade.dubaiai.indicators.IndicatorEngine
 import com.orbistrade.dubaiai.strategy.DubaiStrategyEngine
 import com.orbistrade.dubaiai.strategy.SignalDirection
+import com.orbistrade.dubaiai.strategy.StrategySignal
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
 import org.opencv.core.Mat
@@ -20,9 +21,9 @@ import org.opencv.core.Rect
 import org.opencv.imgproc.Imgproc
 import kotlin.math.max
 
-class FrameAnalyzer(context: Context) {
+class FrameAnalyzer {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-    private val historyStore = SignalHistoryStore(context.applicationContext)
+    private val historyStore = SignalHistoryStore(OrbisApplication.instance)
     private var analyzedFrames = 0L
     private var lastOcrText = ""
     private var lastStoredDirection = SignalDirection.WAIT
@@ -89,16 +90,12 @@ class FrameAnalyzer(context: Context) {
         }
     }
 
-    fun close() {
-        recognizer.close()
-        historyStore.close()
-    }
+    fun close() { recognizer.close(); historyStore.close() }
 
-    private fun persistActionableSignal(signal: com.orbistrade.dubaiai.strategy.StrategySignal) {
+    private fun persistActionableSignal(signal: StrategySignal) {
         if (signal.direction == SignalDirection.WAIT || signal.score < MIN_ALERT_SCORE) return
         val now = System.currentTimeMillis()
-        val duplicate = signal.direction == lastStoredDirection && now - lastStoredAt < SIGNAL_COOLDOWN_MS
-        if (duplicate) return
+        if (signal.direction == lastStoredDirection && now - lastStoredAt < SIGNAL_COOLDOWN_MS) return
         historyStore.insert(signal, extractAsset(lastOcrText))
         lastStoredDirection = signal.direction
         lastStoredAt = now
@@ -117,11 +114,8 @@ class FrameAnalyzer(context: Context) {
         .maxByOrNull(Rect::area)
 
     private fun reconstructCandles(rectangles: List<Rect>, graph: Rect): List<Candle> {
-        val candidates = rectangles
-            .filter { isCandle(it, graph) }
-            .sortedBy(Rect::x)
+        val candidates = rectangles.filter { isCandle(it, graph) }.sortedBy(Rect::x)
             .distinctBy { it.x / max(2, graph.width / 120) }
-
         return candidates.map { rect ->
             val high = (graph.y + graph.height - rect.y).toDouble()
             val low = (graph.y + graph.height - (rect.y + rect.height)).toDouble()
@@ -129,7 +123,7 @@ class FrameAnalyzer(context: Context) {
             val bodyPadding = max(1.0, rect.height * 0.22)
             val open = if (bullish) low + bodyPadding else high - bodyPadding
             val close = if (bullish) high - bodyPadding else low + bodyPadding
-            Candle(open = open, high = high, low = low, close = close, x = rect.x)
+            Candle(open, high, low, close, rect.x)
         }
     }
 
