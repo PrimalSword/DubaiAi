@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +42,7 @@ import androidx.navigation.compose.rememberNavController
 import com.orbistrade.dubaiai.capture.ScreenCaptureService
 import com.orbistrade.dubaiai.core.AppRuntimeState
 import com.orbistrade.dubaiai.overlay.OverlayService
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,7 +100,7 @@ private fun ControlScreen(viewModel: MainViewModel) {
 
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Orbis Trade AI", style = MaterialTheme.typography.headlineMedium)
-        Text("Sprint 1 + Sprint 2 — captura e visão computacional")
+        Text("Sprint 2.1 + Sprint 3 — visão em segundo plano e indicadores")
         StatusCard("Overlay", overlayRunning)
         StatusCard("MediaProjection", captureRunning)
         Button(modifier = Modifier.fillMaxWidth(), onClick = {
@@ -120,18 +123,31 @@ private fun ControlScreen(viewModel: MainViewModel) {
 private fun VisionScreen(viewModel: MainViewModel) {
     val frames by viewModel.capturedFrames.collectAsState()
     val vision by viewModel.vision.collectAsState()
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Diagnóstico de visão", style = MaterialTheme.typography.headlineMedium)
+    val indicators = vision.indicators
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Diagnóstico e indicadores", style = MaterialTheme.typography.headlineMedium)
         MetricCard("Frames capturados", frames.toString())
         MetricCard("Frames analisados", vision.analyzedFrames.toString())
         MetricCard("Gráfico detectado", if (vision.graphDetected) "SIM (${(vision.graphConfidence * 100).toInt()}%)" else "NÃO")
-        MetricCard("Candles candidatos", vision.candleCount.toString())
+        MetricCard("Candles reconstruídos", vision.candleCount.toString())
+        MetricCard("Tendência", indicators.trend)
+        MetricCard("Volatilidade", indicators.volatility)
+        MetricCard("Lateralidade", if (indicators.lateral) "SIM" else "NÃO")
+        MetricCard("EMA 12", format(indicators.ema12))
+        MetricCard("EMA 60", format(indicators.ema60))
+        MetricCard("Bollinger 12 / 1,5", "${format(indicators.bollingerLower)} | ${format(indicators.bollingerMiddle)} | ${format(indicators.bollingerUpper)}")
+        MetricCard("ATR 14", format(indicators.atr14))
         MetricCard("Processamento", "${vision.processingMs} ms")
         MetricCard("OCR", vision.ocrText.ifBlank { "Aguardando texto..." })
         vision.error?.let { Text("Erro: $it") }
-        Text("A detecção é experimental e será calibrada com capturas reais da corretora.")
+        Text("Os preços são coordenadas normalizadas da imagem; a calibração visual será feita com gráficos reais da corretora.")
     }
 }
+
+private fun format(value: Double?): String = value?.let { String.format(Locale.US, "%.2f", it) } ?: "AQUECENDO"
 
 @Composable
 private fun StatusCard(label: String, active: Boolean) = MetricCard(label, if (active) "ATIVO" else "INATIVO")
