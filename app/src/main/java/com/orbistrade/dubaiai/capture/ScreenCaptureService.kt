@@ -6,9 +6,11 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.media.Image
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -19,12 +21,15 @@ import android.os.IBinder
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import com.orbistrade.dubaiai.core.AppRuntimeState
+import com.orbistrade.dubaiai.vision.FrameAnalyzer
 
 class ScreenCaptureService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
     private var captureThread: HandlerThread? = null
+    private var frameNumber = 0L
+    private val analyzer by lazy { FrameAnalyzer() }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotificationChannel()
@@ -45,6 +50,7 @@ class ScreenCaptureService : Service() {
 
     override fun onDestroy() {
         stopProjection()
+        analyzer.close()
         super.onDestroy()
     }
 
@@ -52,16 +58,12 @@ class ScreenCaptureService : Service() {
 
     private fun startProjection(resultCode: Int, resultData: Intent) {
         stopProjection()
-
         captureThread = HandlerThread("orbis-screen-capture").apply { start() }
         val handler = Handler(captureThread!!.looper)
         val projectionManager = getSystemService(MediaProjectionManager::class.java)
         mediaProjection = projectionManager.getMediaProjection(resultCode, resultData)
-
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {
-            override fun onStop() {
-                stopSelf()
-            }
+            override fun onStop() { stopSelf() }
         }, handler)
 
         val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -76,8 +78,15 @@ class ScreenCaptureService : Service() {
             2
         ).apply {
             setOnImageAvailableListener({ reader ->
-                reader.acquireLatestImage()?.use {
+                reader.acquireLatestImage()?.use { image ->
                     AppRuntimeState.registerFrame()
+                    frameNumber++
+                    if (frameNumber % ANALYSIS_INTERVAL == 0L) {
+                        image.toBitmap()?.let { bitmap ->
+                            analyzer.analyze(bitmap)
+                            bitmap.recycle()
+                        }
+                    }
                 }
             }, handler)
         }
@@ -92,8 +101,23 @@ class ScreenCaptureService : Service() {
             null,
             handler
         )
-
         AppRuntimeState.setCaptureRunning(virtualDisplay != null)
+    }
+
+    private fun Image.toBitmap(): Bitmap? {
+        val plane = planes.firstOrNull() ?: return null
+        val buffer = plane.buffer
+        buffer.rewind()
+        val pixelStride = plane.pixelStride
+        val rowStride = plane.rowStride
+        val rowPadding = rowStride - pixelStride * width
+        val paddedWidth = width + rowPadding / pixelStride
+        val padded = Bitmap.createBitmap(paddedWidth, height, Bitmap.Config.ARGB_8888)
+        padded.copyPixelsFromBuffer(buffer)
+        if (paddedWidth == width) return padded
+        val cropped = Bitmap.createBitmap(padded, 0, 0, width, height)
+        padded.recycle()
+        return cropped
     }
 
     private fun stopProjection() {
@@ -112,7 +136,7 @@ class ScreenCaptureService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("Orbis Trade AI")
-                .setContentText("Captura de tela ativa")
+                .setContentText("Captura e visão computacional ativas")
                 .setSmallIcon(android.R.drawable.ic_menu_camera)
                 .setOngoing(true)
                 .build()
@@ -120,7 +144,7 @@ class ScreenCaptureService : Service() {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
                 .setContentTitle("Orbis Trade AI")
-                .setContentText("Captura de tela ativa")
+                .setContentText("Captura e visão computacional ativas")
                 .setSmallIcon(android.R.drawable.ic_menu_camera)
                 .setOngoing(true)
                 .build()
@@ -142,5 +166,6 @@ class ScreenCaptureService : Service() {
         const val EXTRA_RESULT_DATA = "result_data"
         private const val CHANNEL_ID = "screen_capture"
         private const val NOTIFICATION_ID = 1002
+        private const val ANALYSIS_INTERVAL = 5L
     }
 }

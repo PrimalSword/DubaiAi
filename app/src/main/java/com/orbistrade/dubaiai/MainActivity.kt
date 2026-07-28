@@ -16,10 +16,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -46,21 +44,10 @@ import com.orbistrade.dubaiai.overlay.OverlayService
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        requestNotificationsIfNeeded()
-        setContent {
-            MaterialTheme {
-                OrbisTradeApp()
-            }
-        }
-    }
-
-    private fun requestNotificationsIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2001)
-        }
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2001)
+        setContent { MaterialTheme { OrbisTradeApp() } }
     }
 }
 
@@ -68,34 +55,28 @@ class MainViewModel : ViewModel() {
     val overlayRunning = AppRuntimeState.overlayRunning
     val captureRunning = AppRuntimeState.captureRunning
     val capturedFrames = AppRuntimeState.capturedFrames
+    val vision = AppRuntimeState.vision
 }
 
 @Composable
 private fun OrbisTradeApp(viewModel: MainViewModel = viewModel()) {
     val navController = rememberNavController()
-    val routes = listOf("controle", "diagnostico")
-
-    Scaffold(
-        bottomBar = {
-            NavigationBar {
-                routes.forEach { route ->
-                    NavigationBarItem(
-                        selected = false,
-                        onClick = { navController.navigate(route) },
-                        icon = { Text(if (route == "controle") "◉" else "≡") },
-                        label = { Text(route.replaceFirstChar(Char::uppercase)) }
-                    )
-                }
+    val routes = listOf("controle", "visao")
+    Scaffold(bottomBar = {
+        NavigationBar {
+            routes.forEach { route ->
+                NavigationBarItem(
+                    selected = false,
+                    onClick = { navController.navigate(route) },
+                    icon = { Text(if (route == "controle") "◉" else "◎") },
+                    label = { Text(route.replaceFirstChar(Char::uppercase)) }
+                )
             }
         }
-    ) { padding ->
-        NavHost(
-            navController = navController,
-            startDestination = "controle",
-            modifier = Modifier.padding(padding)
-        ) {
+    }) { padding ->
+        NavHost(navController, "controle", Modifier.padding(padding)) {
             composable("controle") { ControlScreen(viewModel) }
-            composable("diagnostico") { DiagnosticsScreen(viewModel) }
+            composable("visao") { VisionScreen(viewModel) }
         }
     }
 }
@@ -105,105 +86,62 @@ private fun ControlScreen(viewModel: MainViewModel) {
     val activity = androidx.compose.ui.platform.LocalContext.current as Activity
     val overlayRunning by viewModel.overlayRunning.collectAsState()
     val captureRunning by viewModel.captureRunning.collectAsState()
-
-    val captureLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val data = result.data
-        if (result.resultCode == Activity.RESULT_OK && data != null) {
-            val serviceIntent = Intent(activity, ScreenCaptureService::class.java).apply {
+    val captureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        result.data?.takeIf { result.resultCode == Activity.RESULT_OK }?.let { data ->
+            ContextCompat.startForegroundService(activity, Intent(activity, ScreenCaptureService::class.java).apply {
                 putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, result.resultCode)
                 putExtra(ScreenCaptureService.EXTRA_RESULT_DATA, data)
-            }
-            ContextCompat.startForegroundService(activity, serviceIntent)
+            })
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Orbis Trade AI", style = MaterialTheme.typography.headlineMedium)
-        Text("Sprint 1 — infraestrutura de leitura em tela")
-
+        Text("Sprint 1 + Sprint 2 — captura e visão computacional")
         StatusCard("Overlay", overlayRunning)
-        StatusCard("Captura MediaProjection", captureRunning)
-
-        Button(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = {
-                if (!Settings.canDrawOverlays(activity)) {
-                    activity.startActivity(
-                        Intent(
-                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:${activity.packageName}")
-                        )
-                    )
-                } else {
-                    ContextCompat.startForegroundService(
-                        activity,
-                        Intent(activity, OverlayService::class.java)
-                    )
-                }
-            }
-        ) {
-            Text(if (overlayRunning) "Overlay ativo" else "Autorizar e iniciar overlay")
-        }
-
-        Button(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = {
-                val manager = activity.getSystemService(MediaProjectionManager::class.java)
-                captureLauncher.launch(manager.createScreenCaptureIntent())
-            }
-        ) {
-            Text(if (captureRunning) "Captura ativa" else "Iniciar captura da tela")
-        }
-
+        StatusCard("MediaProjection", captureRunning)
+        Button(modifier = Modifier.fillMaxWidth(), onClick = {
+            if (!Settings.canDrawOverlays(activity)) {
+                activity.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${activity.packageName}")))
+            } else ContextCompat.startForegroundService(activity, Intent(activity, OverlayService::class.java))
+        }) { Text(if (overlayRunning) "Overlay ativo" else "Autorizar e iniciar overlay") }
+        Button(modifier = Modifier.fillMaxWidth(), onClick = {
+            val manager = activity.getSystemService(MediaProjectionManager::class.java)
+            captureLauncher.launch(manager.createScreenCaptureIntent())
+        }) { Text(if (captureRunning) "Captura ativa" else "Iniciar captura e análise") }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = { activity.stopService(Intent(activity, OverlayService::class.java)) }) {
-                Text("Parar overlay")
-            }
-            Button(onClick = { activity.stopService(Intent(activity, ScreenCaptureService::class.java)) }) {
-                Text("Parar captura")
-            }
+            Button(onClick = { activity.stopService(Intent(activity, OverlayService::class.java)) }) { Text("Parar overlay") }
+            Button(onClick = { activity.stopService(Intent(activity, ScreenCaptureService::class.java)) }) { Text("Parar captura") }
         }
     }
 }
 
 @Composable
-private fun DiagnosticsScreen(viewModel: MainViewModel) {
-    val overlayRunning by viewModel.overlayRunning.collectAsState()
-    val captureRunning by viewModel.captureRunning.collectAsState()
+private fun VisionScreen(viewModel: MainViewModel) {
     val frames by viewModel.capturedFrames.collectAsState()
-
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text("Diagnóstico", style = MaterialTheme.typography.headlineMedium)
-        StatusCard("Serviço de overlay", overlayRunning)
-        StatusCard("Serviço de captura", captureRunning)
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Frames recebidos")
-                Spacer(Modifier.height(4.dp))
-                Text(frames.toString(), style = MaterialTheme.typography.headlineSmall)
-            }
-        }
-        Text("O Sprint 2 usará esses frames para detectar gráfico e candles.")
+    val vision by viewModel.vision.collectAsState()
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Diagnóstico de visão", style = MaterialTheme.typography.headlineMedium)
+        MetricCard("Frames capturados", frames.toString())
+        MetricCard("Frames analisados", vision.analyzedFrames.toString())
+        MetricCard("Gráfico detectado", if (vision.graphDetected) "SIM (${(vision.graphConfidence * 100).toInt()}%)" else "NÃO")
+        MetricCard("Candles candidatos", vision.candleCount.toString())
+        MetricCard("Processamento", "${vision.processingMs} ms")
+        MetricCard("OCR", vision.ocrText.ifBlank { "Aguardando texto..." })
+        vision.error?.let { Text("Erro: $it") }
+        Text("A detecção é experimental e será calibrada com capturas reais da corretora.")
     }
 }
 
 @Composable
-private fun StatusCard(label: String, active: Boolean) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+private fun StatusCard(label: String, active: Boolean) = MetricCard(label, if (active) "ATIVO" else "INATIVO")
+
+@Composable
+private fun MetricCard(label: String, value: String) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(label)
-            Text(if (active) "ATIVO" else "INATIVO")
+            Text(value, style = MaterialTheme.typography.titleMedium)
         }
     }
 }
