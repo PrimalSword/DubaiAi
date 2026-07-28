@@ -68,7 +68,10 @@ class MainViewModel : ViewModel() {
         Text("Modo de mercado",style=MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { Button(onClick={vm.setMode(MarketMode.OPEN_MARKET)},enabled=mode!=MarketMode.OPEN_MARKET){Text("Mercado aberto")}; Button(onClick={vm.setMode(MarketMode.OTC)},enabled=mode!=MarketMode.OTC){Text("OTC")} }
         MetricCard("Modo",if(mode==MarketMode.OTC)"OTC" else "MERCADO ABERTO"); StatusCard("Overlay",overlay); StatusCard("MediaProjection",capture)
-        Button(onClick={if(!Settings.canDrawOverlays(activity)) {{activity.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:${activity.packageName}")))}} else {{ContextCompat.startForegroundService(activity,Intent(activity,OverlayService::class.java))}}},modifier=Modifier.fillMaxWidth()){Text(if(overlay)"Overlay ativo" else "Autorizar e iniciar overlay")}
+        Button(onClick={
+            if(!Settings.canDrawOverlays(activity)) activity.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:${activity.packageName}")))
+            else ContextCompat.startForegroundService(activity,Intent(activity,OverlayService::class.java))
+        },modifier=Modifier.fillMaxWidth()){Text(if(overlay)"Overlay ativo" else "Autorizar e iniciar overlay")}
         Button(onClick={launcher.launch(activity.getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())},modifier=Modifier.fillMaxWidth()){Text(if(capture)"Captura ativa" else "Iniciar captura e análise")}
         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){Button(onClick={activity.stopService(Intent(activity,OverlayService::class.java))}){Text("Parar overlay")};Button(onClick={activity.stopService(Intent(activity,ScreenCaptureService::class.java))}){Text("Parar captura")}}
     }
