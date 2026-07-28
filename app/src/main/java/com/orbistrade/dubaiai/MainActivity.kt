@@ -100,12 +100,12 @@ private fun ControlScreen(viewModel: MainViewModel) {
         Text("Sprint 1 + Sprint 2 — captura e visão computacional")
         StatusCard("Overlay", overlayRunning)
         StatusCard("MediaProjection", captureRunning)
-        Button(Modifier.fillMaxWidth(), onClick = {
+        Button(modifier = Modifier.fillMaxWidth(), onClick = {
             if (!Settings.canDrawOverlays(activity)) {
                 activity.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${activity.packageName}")))
             } else ContextCompat.startForegroundService(activity, Intent(activity, OverlayService::class.java))
         }) { Text(if (overlayRunning) "Overlay ativo" else "Autorizar e iniciar overlay") }
-        Button(Modifier.fillMaxWidth(), onClick = {
+        Button(modifier = Modifier.fillMaxWidth(), onClick = {
             val manager = activity.getSystemService(MediaProjectionManager::class.java)
             captureLauncher.launch(manager.createScreenCaptureIntent())
         }) { Text(if (captureRunning) "Captura ativa" else "Iniciar captura e análise") }
