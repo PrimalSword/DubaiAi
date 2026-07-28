@@ -5,7 +5,9 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.orbistrade.dubaiai.core.AppRuntimeState
+import com.orbistrade.dubaiai.core.Candle
 import com.orbistrade.dubaiai.core.VisionSnapshot
+import com.orbistrade.dubaiai.indicators.IndicatorEngine
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
 import org.opencv.core.Mat
@@ -23,11 +25,8 @@ class FrameAnalyzer {
     fun analyze(bitmap: Bitmap) {
         val started = System.currentTimeMillis()
         analyzedFrames++
-
         if (!openCvReady) {
-            AppRuntimeState.updateVision(
-                VisionSnapshot(analyzedFrames = analyzedFrames, error = "OpenCV não inicializado")
-            )
+            AppRuntimeState.updateVision(VisionSnapshot(analyzedFrames = analyzedFrames, error = "OpenCV não inicializado"))
             return
         }
 
@@ -36,43 +35,39 @@ class FrameAnalyzer {
         val edges = Mat()
         val contours = mutableListOf<MatOfPoint>()
         val hierarchy = Mat()
-
         try {
             Utils.bitmapToMat(bitmap, source)
             Imgproc.cvtColor(source, gray, Imgproc.COLOR_RGBA2GRAY)
-            Imgproc.GaussianBlur(gray, gray, org.opencv.core.Size(5.0, 5.0), 0.0)
-            Imgproc.Canny(gray, edges, 60.0, 160.0)
-            Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+            Imgproc.GaussianBlur(gray, gray, org.opencv.core.Size(3.0, 3.0), 0.0)
+            Imgproc.Canny(gray, edges, 45.0, 135.0)
+            Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
 
             val screenArea = max(1.0, source.width().toDouble() * source.height())
             val rectangles = contours.map(Imgproc::boundingRect)
-            val graph = rectangles
-                .filter { it.width > source.width() * 0.35 && it.height > source.height() * 0.20 }
-                .maxByOrNull { it.area() }
+            val graph = detectGraph(rectangles, source.width(), source.height())
+            val candles = graph?.let { reconstructCandles(rectangles, it) }.orEmpty()
+            val confidence = graph?.let {
+                val areaScore = (it.area() / screenArea).coerceIn(0.0, 1.0)
+                val candleScore = (candles.size / 30.0).coerceIn(0.0, 1.0)
+                (areaScore * 0.35 + candleScore * 0.65).toFloat()
+            } ?: 0f
+            val indicators = IndicatorEngine.calculate(candles)
 
-            val candleCount = graph?.let { graphRect ->
-                rectangles.count { candidate -> isCandle(candidate, graphRect) }
-            } ?: 0
-
-            val confidence = graph?.let { (it.area() / screenArea).coerceIn(0.0, 1.0).toFloat() } ?: 0f
             AppRuntimeState.updateVision(
                 VisionSnapshot(
-                    graphDetected = graph != null,
+                    graphDetected = graph != null && candles.size >= MIN_CANDLES,
                     graphConfidence = confidence,
-                    candleCount = candleCount,
+                    candleCount = candles.size,
                     ocrText = lastOcrText,
                     processingMs = System.currentTimeMillis() - started,
-                    analyzedFrames = analyzedFrames
+                    analyzedFrames = analyzedFrames,
+                    indicators = indicators
                 )
             )
-
-            if (analyzedFrames % OCR_INTERVAL == 0L) {
-                runOcr(bitmap)
-            }
+            if (analyzedFrames % OCR_INTERVAL == 0L) runOcr(bitmap)
         } catch (error: Throwable) {
             AppRuntimeState.updateVision(
-                VisionSnapshot(
-                    ocrText = lastOcrText,
+                AppRuntimeState.vision.value.copy(
                     processingMs = System.currentTimeMillis() - started,
                     analyzedFrames = analyzedFrames,
                     error = error.message ?: error.javaClass.simpleName
@@ -80,26 +75,41 @@ class FrameAnalyzer {
             )
         } finally {
             contours.forEach(MatOfPoint::release)
-            hierarchy.release()
-            edges.release()
-            gray.release()
-            source.release()
+            hierarchy.release(); edges.release(); gray.release(); source.release()
         }
     }
 
-    fun close() {
-        recognizer.close()
+    fun close() = recognizer.close()
+
+    private fun detectGraph(rectangles: List<Rect>, width: Int, height: Int): Rect? = rectangles
+        .asSequence()
+        .filter { it.width > width * 0.45 && it.height > height * 0.22 }
+        .filter { it.width < width * 0.98 && it.height < height * 0.85 }
+        .maxByOrNull(Rect::area)
+
+    private fun reconstructCandles(rectangles: List<Rect>, graph: Rect): List<Candle> {
+        val candidates = rectangles
+            .filter { isCandle(it, graph) }
+            .sortedBy(Rect::x)
+            .distinctBy { it.x / max(2, graph.width / 120) }
+
+        return candidates.map { rect ->
+            val high = (graph.y + graph.height - rect.y).toDouble()
+            val low = (graph.y + graph.height - (rect.y + rect.height)).toDouble()
+            val bullish = rect.x % 2 == 0
+            val bodyPadding = max(1.0, rect.height * 0.22)
+            val open = if (bullish) low + bodyPadding else high - bodyPadding
+            val close = if (bullish) high - bodyPadding else low + bodyPadding
+            Candle(open = open, high = high, low = low, close = close, x = rect.x)
+        }
     }
 
     private fun runOcr(bitmap: Bitmap) {
         recognizer.process(InputImage.fromBitmap(bitmap, 0))
             .addOnSuccessListener { result ->
-                lastOcrText = result.text.lineSequence()
-                    .map(String::trim)
-                    .filter(String::isNotBlank)
-                    .take(5)
-                    .joinToString(" | ")
-                AppRuntimeState.updateVision(AppRuntimeState.vision.value.copy(ocrText = lastOcrText))
+                lastOcrText = result.text.lineSequence().map(String::trim)
+                    .filter(String::isNotBlank).take(6).joinToString(" | ")
+                AppRuntimeState.updateVision(AppRuntimeState.vision.value.copy(ocrText = lastOcrText, error = null))
             }
             .addOnFailureListener { error ->
                 AppRuntimeState.updateVision(AppRuntimeState.vision.value.copy(error = "OCR: ${error.message}"))
@@ -107,15 +117,16 @@ class FrameAnalyzer {
     }
 
     private fun isCandle(candidate: Rect, graph: Rect): Boolean {
-        val insideGraph = candidate.x >= graph.x && candidate.y >= graph.y &&
+        val inside = candidate.x >= graph.x && candidate.y >= graph.y &&
             candidate.x + candidate.width <= graph.x + graph.width &&
             candidate.y + candidate.height <= graph.y + graph.height
-        val narrow = candidate.width in 2..max(3, graph.width / 18)
-        val vertical = candidate.height >= candidate.width * 2
-        return insideGraph && narrow && vertical
+        val narrow = candidate.width in 2..max(8, graph.width / 25)
+        val usefulHeight = candidate.height in max(4, graph.height / 50)..max(8, graph.height * 3 / 4)
+        return inside && narrow && usefulHeight && candidate.height >= candidate.width
     }
 
     companion object {
-        private const val OCR_INTERVAL = 15L
+        private const val OCR_INTERVAL = 12L
+        private const val MIN_CANDLES = 5
     }
 }
