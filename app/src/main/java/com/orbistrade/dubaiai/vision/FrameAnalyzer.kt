@@ -1,5 +1,6 @@
 package com.orbistrade.dubaiai.vision
 
+import android.content.Context
 import android.graphics.Bitmap
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -7,7 +8,10 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.orbistrade.dubaiai.core.AppRuntimeState
 import com.orbistrade.dubaiai.core.Candle
 import com.orbistrade.dubaiai.core.VisionSnapshot
+import com.orbistrade.dubaiai.history.SignalHistoryStore
 import com.orbistrade.dubaiai.indicators.IndicatorEngine
+import com.orbistrade.dubaiai.strategy.DubaiStrategyEngine
+import com.orbistrade.dubaiai.strategy.SignalDirection
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
 import org.opencv.core.Mat
@@ -16,10 +20,13 @@ import org.opencv.core.Rect
 import org.opencv.imgproc.Imgproc
 import kotlin.math.max
 
-class FrameAnalyzer {
+class FrameAnalyzer(context: Context) {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    private val historyStore = SignalHistoryStore(context.applicationContext)
     private var analyzedFrames = 0L
     private var lastOcrText = ""
+    private var lastStoredDirection = SignalDirection.WAIT
+    private var lastStoredAt = 0L
     private val openCvReady = OpenCVLoader.initLocal()
 
     fun analyze(bitmap: Bitmap) {
@@ -52,6 +59,7 @@ class FrameAnalyzer {
                 (areaScore * 0.35 + candleScore * 0.65).toFloat()
             } ?: 0f
             val indicators = IndicatorEngine.calculate(candles)
+            val strategy = DubaiStrategyEngine.evaluate(indicators)
 
             AppRuntimeState.updateVision(
                 VisionSnapshot(
@@ -61,9 +69,11 @@ class FrameAnalyzer {
                     ocrText = lastOcrText,
                     processingMs = System.currentTimeMillis() - started,
                     analyzedFrames = analyzedFrames,
-                    indicators = indicators
+                    indicators = indicators,
+                    strategy = strategy
                 )
             )
+            persistActionableSignal(strategy)
             if (analyzedFrames % OCR_INTERVAL == 0L) runOcr(bitmap)
         } catch (error: Throwable) {
             AppRuntimeState.updateVision(
@@ -79,7 +89,26 @@ class FrameAnalyzer {
         }
     }
 
-    fun close() = recognizer.close()
+    fun close() {
+        recognizer.close()
+        historyStore.close()
+    }
+
+    private fun persistActionableSignal(signal: com.orbistrade.dubaiai.strategy.StrategySignal) {
+        if (signal.direction == SignalDirection.WAIT || signal.score < MIN_ALERT_SCORE) return
+        val now = System.currentTimeMillis()
+        val duplicate = signal.direction == lastStoredDirection && now - lastStoredAt < SIGNAL_COOLDOWN_MS
+        if (duplicate) return
+        historyStore.insert(signal, extractAsset(lastOcrText))
+        lastStoredDirection = signal.direction
+        lastStoredAt = now
+        AppRuntimeState.updateHistory(historyStore.recent())
+    }
+
+    private fun extractAsset(text: String): String = text.split("|")
+        .map(String::trim)
+        .firstOrNull { it.contains("/") || it.contains("OTC", ignoreCase = true) }
+        .orEmpty()
 
     private fun detectGraph(rectangles: List<Rect>, width: Int, height: Int): Rect? = rectangles
         .asSequence()
@@ -128,5 +157,7 @@ class FrameAnalyzer {
     companion object {
         private const val OCR_INTERVAL = 12L
         private const val MIN_CANDLES = 5
+        private const val MIN_ALERT_SCORE = 60
+        private const val SIGNAL_COOLDOWN_MS = 45_000L
     }
 }
