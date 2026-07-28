@@ -23,13 +23,15 @@ class OverlayService : Service() {
         override fun run() {
             val vision = AppRuntimeState.vision.value
             val indicators = vision.indicators
+            val strategy = vision.strategy
             overlayView?.text = buildString {
-                append("ORBIS Radar\n")
+                append("ORBIS Dubai V1\n")
                 append(if (vision.graphDetected) "Gráfico: SIM" else "Procurando gráfico")
                 append("\nCandles: ${vision.candleCount}")
                 append("\nTendência: ${indicators.trend}")
-                append("\nVolatilidade: ${indicators.volatility}")
-                if (indicators.lateral) append("\nLATERAL")
+                append("\nSinal: ${strategy.direction}")
+                append("\nScore: ${strategy.score}/100")
+                append("\nConfiança: ${strategy.confidence}")
             }
             handler.postDelayed(this, 600L)
         }
@@ -57,7 +59,7 @@ class OverlayService : Service() {
     private fun showOverlay() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         overlayView = TextView(this).apply {
-            text = "ORBIS Radar\nInicializando..."
+            text = "ORBIS Dubai V1\nInicializando..."
             textSize = 12f
             setTextColor(0xFFFFFFFF.toInt())
             setBackgroundColor(0xDD111827.toInt())
@@ -84,14 +86,14 @@ class OverlayService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("Orbis Trade AI")
-                .setContentText("Radar e indicadores ativos")
+                .setContentText("Dubai V1 e alertas ativos")
                 .setSmallIcon(android.R.drawable.ic_menu_view)
                 .setOngoing(true).build()
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
                 .setContentTitle("Orbis Trade AI")
-                .setContentText("Radar e indicadores ativos")
+                .setContentText("Dubai V1 e alertas ativos")
                 .setSmallIcon(android.R.drawable.ic_menu_view)
                 .setOngoing(true).build()
         }
