@@ -3,6 +3,27 @@ package com.orbistrade.dubaiai.core
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+data class Candle(
+    val open: Double,
+    val high: Double,
+    val low: Double,
+    val close: Double,
+    val x: Int
+)
+
+data class IndicatorSnapshot(
+    val candleCount: Int = 0,
+    val ema12: Double? = null,
+    val ema60: Double? = null,
+    val bollingerUpper: Double? = null,
+    val bollingerMiddle: Double? = null,
+    val bollingerLower: Double? = null,
+    val atr14: Double? = null,
+    val trend: String = "SEM DADOS",
+    val volatility: String = "SEM DADOS",
+    val lateral: Boolean = false
+)
+
 data class VisionSnapshot(
     val graphDetected: Boolean = false,
     val graphConfidence: Float = 0f,
@@ -10,6 +31,7 @@ data class VisionSnapshot(
     val ocrText: String = "",
     val processingMs: Long = 0L,
     val analyzedFrames: Long = 0L,
+    val indicators: IndicatorSnapshot = IndicatorSnapshot(),
     val error: String? = null
 )
 
