@@ -16,6 +16,15 @@ class IndicatorEngineTest {
     }
 
     @Test
+    fun ema60IsAvailableWithFortyFiveVisibleCandles() {
+        val values = (1..45).map(Int::toDouble)
+        val ema = IndicatorEngine.ema(values, 60)
+        assertNotNull(ema)
+        assertTrue(ema!! > values.first())
+        assertTrue(ema < values.last())
+    }
+
+    @Test
     fun bollingerBandsAreOrdered() {
         val bands = IndicatorEngine.bollinger((1..20).map(Int::toDouble), 12, 1.5)
         assertNotNull(bands)
@@ -34,7 +43,7 @@ class IndicatorEngineTest {
 
     @Test
     fun risingSeriesProducesUptrendWhenWarm() {
-        val candles = (0..79).map { index ->
+        val candles = (0..44).map { index ->
             val base = index.toDouble()
             Candle(base, base + 2.0, base - 1.0, base + 1.5, index)
         }
