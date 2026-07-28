@@ -2,9 +2,10 @@ name: Android CI
 
 on:
   push:
-    branches: [main, feature/sprint-1-infrastructure]
+    branches: [main, "feature/**"]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -24,8 +25,19 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      - name: Run unit tests
+        run: gradle :app:testDebugUnitTest --stacktrace
+
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
 
-      - name: Run unit tests
-        run: gradle :app:testDebugUnitTest --stacktrace
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk Orbis-Trade-AI-v0.2.0-debug.apk
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Orbis-Trade-AI-v0.2.0-debug
+          path: Orbis-Trade-AI-v0.2.0-debug.apk
+          if-no-files-found: error
+          retention-days: 30
