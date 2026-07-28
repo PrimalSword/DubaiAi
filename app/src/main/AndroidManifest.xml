@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
+        android:name=".OrbisApplication"
         android:allowBackup="true"
         android:icon="@android:drawable/ic_menu_view"
         android:label="Orbis Trade AI"
