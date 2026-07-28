@@ -77,6 +77,11 @@ object DubaiStrategyEngine {
             emaSeparation >= 0.5 -> score += 10
         }
 
+        if (indicators.candleCount < 60) {
+            score -= 15
+            reasons += "EMA 60 ainda em maturação (${indicators.candleCount}/60)"
+        }
+
         score = score.coerceIn(0, 100)
         val confidence = when {
             score >= 80 -> "ALTA"
